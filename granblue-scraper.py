@@ -1,11 +1,12 @@
 import code
+import csv
 from os import makedirs, path
 from random import uniform as random
 from selenium import webdriver
 from time import time as time_now
 from time import sleep, strftime
-import csv
 
+from pushbullet import InvalidKeyError, Pushbullet
 from seleniumrequests import Chrome
 
 OPTIONS = webdriver.ChromeOptions()
@@ -13,12 +14,17 @@ PROFILE = path.abspath('.\\profile')
 OPTIONS.add_argument('user-data-dir=%s' % PROFILE)
 OPTIONS.binary_location = '.\\chrome-win32\\chrome.exe'
 
+LOG_FILE = '[{}] GBFScraper.log'.format(strftime('%m-%d %H%M'))
+USE_PB = False
+API_KEY = {
+    'PB': '',
+}
+
 
 def log(message):
     '''Prints to console and outputs to log file'''
-    log_file = '[{}] GBFScraper.log'.format(strftime('%m-%d %H%M'))
     try:
-        with open('.\\logs\\' + log_file, 'a', encoding='utf-8', newline='') as fout:
+        with open('.\\logs\\' + LOG_FILE, 'a', encoding='utf-8', newline='') as fout:
             message = '[%s] %s' % (strftime('%a %H:%M:%S'), message)
             print(message)
             fout.write(message + '\n')
@@ -28,54 +34,126 @@ def log(message):
         log(message)
 
 
+def alert_operator(message, pause=True):
+    '''Push alerts for CAPTCHAs, etc.'''
+    if USE_PB is True and message.__len__() > 0:
+        try:
+            pub = Pushbullet(API_KEY['PB'])
+            push = pub.push_note('granblue-scraper', message)
+            log(push)
+        except InvalidKeyError:
+            log('Invalid PB API key!')
+    print(message)
+    if pause:
+        input('Press enter to continue...')
+
+
 def csv_writer(row, filename):
-    try:
-        with open('.\\out\\' + filename, 'a', newline='', encoding='utf-8') as fout:
-            writer = csv.writer(fout)
-            writer.writerow(row)
-    except FileNotFoundError:
-        makedirs('.\\out')
-        log('Created out folder')
-        csv_writer(row, filename)
+    with open(filename, 'a', newline='', encoding='utf-8') as fout:
+        writer = csv.writer(fout)
+        writer.writerow(row)
 
 
-def scraper(url, filename):
+def parser(d, parse_type, filename):
+    if parse_type == "GW_individual":
+        d = d['list']
+        for k in d:
+            k = d[k]
+            row = (k['rank'], k['name'], k['total_defeat'],
+                   k['contribution'], k['level'], k['user_id'])
+            csv_writer(row, filename)
+    elif parse_type == "guild_members":
+        d = d['list']
+        for k in d:
+            row = (k['name'], k['level'], k['member_position_name'], k['id'])
+            csv_writer(row, filename)
+
+
+def scraper(url, filename, parse_type):
     headers = {
         'Accept': '''application/json'''
     }
-    r = GBF.request('get', url, headers=headers).json()['list']
-    for k in r:
-        row = (r[k]['rank'], r[k]['name'], r[k]['total_defeat'], r[
-               k]['contribution'], r[k]['level'], r[k]['user_id'])
-        csv_writer(row, filename)
+    while True:
+        try:
+            r = GBF.request('get', url, headers=headers).json()
+            parser(r, parse_type, filename)
+            return
+        except (ConnectionResetError, ConnectionError, ConnectionAbortedError):
+            alert_operator("Reauthentication required")
+        log('Connection timed out')
 
 
-def handler(baseurl, first, last):
-    timestart_date = '{}'.format(strftime('%m-%d %H%M'))
+def handler(baseurl, parse_type, filename, headers, first, last):
     timestart_seconds = time_now()
-    headers = ('rank', 'name', 'battles', 'honor', 'level', 'id')
-    filename = ('[{}] GBFScraper ({} to {}).csv'.format(timestart_date, first, last))
-    csv_writer(('Started at {} for pages {} to {}'.format(timestart_date, first, last),), filename)
+    csv_writer(('Started at {} for pages {} to {}'.format(
+        strftime('%m-%d %H%M'), first, last),), filename)
     csv_writer(headers, filename)
     for page in range(first, last + 1):
         log('Currently on page: {}'.format(page))
-        url = baseurl.format(page)
-        scraper(url, filename)
+        scraper(baseurl.format(page), filename, parse_type)
         sleep(random(0.1, 1))
-    csv_writer('Finished at {}. {} seconds elapsed'.format(
-        strftime('%m-%d %H%M'), (time_now() - timestart_seconds)), filename)
+    # csv_writer(('{} seconds elapsed'.format((time_now() - timestart_seconds)),), filename)
+
+
+def guild_members():
+    dict_of_guilds = {
+        'HSP': 147448,
+        'Lum1': 388489,
+        'Lum2': 401211,
+        'Atelier': 418206,
+        'Little Girls': 432330,
+        'Falz Flag': 479206,
+        'Haruna': 472465,
+        'NoFlipCity': 518173,
+        'FMNL1': 540830,
+        'FMNL2': 719518,
+        '(You)': 581111,
+        'FOXHOUND': 590319,
+        'TriadPrimus': 632242,
+        'OppaiSuki': 678459,
+        'Dem Bois': 705648,
+        'COWFAGS': 841064,
+        'Gransexual': 845439,
+        'Bullies': 745085
+        # 'Aion no Me': 645927,
+        # 'TOOT': 844716,
+        # 'Fleet': 599992,
+    }
+    directory = '.\\GW28\\Guilds\\Information'
+    makedirs(directory, exist_ok=True)
+    baseurl = 'http://game.granbluefantasy.jp/guild_other/member_list/{}/{}'
+    timestart = time_now()
+    for guild in dict_of_guilds:
+        log('Scraping {}'.format(guild))
+        filename = directory + guild + \
+            '{}[{}] {}.csv'.format(directory, strftime('%m-%d %H%M'), guild)
+        headers = ('name', 'level', 'rank', 'id')
+        handler(baseurl.format({}, dict_of_guilds[guild]), 'guild_members', filename, headers, 1, 3)
+    print('Task finished. {} seconds elapsed.'.format(time_now() - timestart))
+
+
+def GW_individual(first, last):
+    url = 'http://game.granbluefantasy.jp/teamraid028/ranking_user/detail/{}'
+    headers = ('rank', 'name', 'battles', 'honor', 'level', 'id')
+    filename = ('.\\GW28\\Individual\\[{}] GBFScraper ({} to {}).csv'.format(
+        str((strftime('%m-%d %H%M'))), first, last))
+    makedirs('.\\GW28\\Individual\\', exist_ok=True)
+    timestart = time_now()
+    handler(url, 'GW_individual', filename, headers, first, last)
+    print('Task finished. {} seconds elapsed.'.format(time_now() - timestart))
 
 
 if __name__ == "__main__":
     GBF = Chrome(executable_path='.\\chromedriver.exe', chrome_options=OPTIONS)
     GBF.get('http://game.granbluefantasy.jp/#profile')
-    sleep(1)
+    sleep(2)
     GBF.request('get', 'http://game.granbluefantasy.jp/#profile')
     try:
-        dummy = input('press')
-        url = 'http://game.granbluefantasy.jp/teamraid028/ranking_user/detail/{}'
-        handler(url, 1, 8000)
+        GW_individual(1, 8000)
+        alert_operator('Task complete.', pause=False)
+        GBF.close()
+        quit()
     except Exception as exp:
         GBF.close()
-        log(exp)
+        alert_operator(exp)
         raise
