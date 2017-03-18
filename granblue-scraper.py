@@ -55,7 +55,7 @@ def handler(baseurl, first, last):
     timestart_seconds = time_now()
     headers = ('rank', 'name', 'battles', 'honor', 'level', 'id')
     filename = ('[{}] GBFScraper ({} to {}).csv'.format(timestart_date, first, last))
-    csv_writer('Started at {} for pages {} to {}'.format(timestart_date, first, last), filename)
+    csv_writer(('Started at {} for pages {} to {}'.format(timestart_date, first, last),), filename)
     csv_writer(headers, filename)
     for page in range(first, last + 1):
         log('Currently on page: {}'.format(page))
