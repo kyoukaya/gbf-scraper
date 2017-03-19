@@ -13,9 +13,9 @@ OPTIONS.add_argument('user-data-dir=%s' % PROFILE)
 OPTIONS.binary_location = '.\\chrome-win32\\chrome.exe'
 
 LOG_FILE = '[{}]GBFScraper.log'.format(strftime('%m-%d_%H%M'))
-USE_PB = True
+USE_PB = False
 API_KEY = {
-    'PB': 'o.LcYNI6OY3AHCI2mMBeNnKG9NFd7yk2LG',
+    'PB': '',
 }
 
 
