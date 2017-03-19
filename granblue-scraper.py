@@ -1,7 +1,5 @@
-import code
 import csv
 from os import makedirs, path
-from random import uniform as random
 from selenium import webdriver
 from time import time as time_now
 from time import sleep, strftime
@@ -14,10 +12,10 @@ PROFILE = path.abspath('.\\profile')
 OPTIONS.add_argument('user-data-dir=%s' % PROFILE)
 OPTIONS.binary_location = '.\\chrome-win32\\chrome.exe'
 
-LOG_FILE = '[{}] GBFScraper.log'.format(strftime('%m-%d %H%M'))
-USE_PB = False
+LOG_FILE = '[{}]GBFScraper.log'.format(strftime('%m-%d_%H%M'))
+USE_PB = True
 API_KEY = {
-    'PB': '',
+    'PB': 'o.LcYNI6OY3AHCI2mMBeNnKG9NFd7yk2LG',
 }
 
 
@@ -36,7 +34,7 @@ def log(message):
 
 def alert_operator(message, pause=True):
     '''Push alerts for CAPTCHAs, etc.'''
-    if USE_PB is True and message.__len__() > 0:
+    if USE_PB is True:
         try:
             pub = Pushbullet(API_KEY['PB'])
             push = pub.push_note('granblue-scraper', message)
@@ -78,25 +76,23 @@ def scraper(url, filename, parse_type):
             r = GBF.request('get', url, headers=headers).json()
             parser(r, parse_type, filename)
             return
+        # Doesn't seem to be catching timeouts?...
         except (ConnectionResetError, ConnectionError, ConnectionAbortedError):
             alert_operator("Reauthentication required")
         log('Connection timed out')
 
 
 def handler(baseurl, parse_type, filename, headers, first, last):
-    timestart_seconds = time_now()
-    csv_writer(('Started at {} for pages {} to {}'.format(
-        strftime('%m-%d %H%M'), first, last),), filename)
     csv_writer(headers, filename)
     for page in range(first, last + 1):
         log('Currently on page: {}'.format(page))
         scraper(baseurl.format(page), filename, parse_type)
-        sleep(random(0.1, 1))
+        sleep(0.1)
     # csv_writer(('{} seconds elapsed'.format((time_now() - timestart_seconds)),), filename)
 
 
 def guild_members():
-    dict_of_guilds = {
+    guilds = {
         'HSP': 147448,
         'Lum1': 388489,
         'Lum2': 401211,
@@ -105,8 +101,6 @@ def guild_members():
         'Falz Flag': 479206,
         'Haruna': 472465,
         'NoFlipCity': 518173,
-        'FMNL1': 540830,
-        'FMNL2': 719518,
         '(You)': 581111,
         'FOXHOUND': 590319,
         'TriadPrimus': 632242,
@@ -114,46 +108,45 @@ def guild_members():
         'Dem Bois': 705648,
         'COWFAGS': 841064,
         'Gransexual': 845439,
-        'Bullies': 745085
-        # 'Aion no Me': 645927,
-        # 'TOOT': 844716,
-        # 'Fleet': 599992,
+        'Bullies': 745085,
+        'Aion no Me': 645927,
+        'TOOT': 844716,
+        'Fleet': 599992,
+        'FMNL1': 540830,
+        'FMNL2': 719518
     }
-    directory = '.\\GW28\\Guilds\\Information'
+    directory = '.\\GW28\\Guilds\\Information\\'
     makedirs(directory, exist_ok=True)
     baseurl = 'http://game.granbluefantasy.jp/guild_other/member_list/{}/{}'
-    timestart = time_now()
-    for guild in dict_of_guilds:
+    for guild in guilds:
         log('Scraping {}'.format(guild))
-        filename = directory + guild + \
-            '{}[{}] {}.csv'.format(directory, strftime('%m-%d %H%M'), guild)
+        filename = directory + '[{}]{}.csv'.format(strftime('%m-%d_%H%M'), guild)
         headers = ('name', 'level', 'rank', 'id')
-        handler(baseurl.format({}, dict_of_guilds[guild]), 'guild_members', filename, headers, 1, 3)
-    print('Task finished. {} seconds elapsed.'.format(time_now() - timestart))
+        handler(baseurl.format({}, guilds[guild]), 'guild_members', filename, headers, 1, 3)
 
 
 def GW_individual(first, last):
     url = 'http://game.granbluefantasy.jp/teamraid028/ranking_user/detail/{}'
     headers = ('rank', 'name', 'battles', 'honor', 'level', 'id')
-    filename = ('.\\GW28\\Individual\\[{}] GBFScraper ({} to {}).csv'.format(
-        str((strftime('%m-%d %H%M'))), first, last))
+    filename = ('.\\GW28\\Individual\\[{}]granblue-scraper_top80k({}-{}).csv'.format(
+        str((strftime('%m-%d_%H%M'))), first, last))
     makedirs('.\\GW28\\Individual\\', exist_ok=True)
-    timestart = time_now()
     handler(url, 'GW_individual', filename, headers, first, last)
-    print('Task finished. {} seconds elapsed.'.format(time_now() - timestart))
 
 
 if __name__ == "__main__":
     GBF = Chrome(executable_path='.\\chromedriver.exe', chrome_options=OPTIONS)
     GBF.get('http://game.granbluefantasy.jp/#profile')
-    sleep(2)
-    GBF.request('get', 'http://game.granbluefantasy.jp/#profile')
+    input()
+    timestart = time_now()
     try:
-        GW_individual(1, 8000)
-        alert_operator('Task complete.', pause=False)
+        GW_individual(4125, 8000)
+        guild_members()
+        alert_operator('Task finished. {} seconds elapsed.'.format(
+            time_now() - timestart), pause=False)
         GBF.close()
         quit()
-    except Exception as exp:
+    except Exception:
         GBF.close()
-        alert_operator(exp)
+        alert_operator('exception occured')
         raise
