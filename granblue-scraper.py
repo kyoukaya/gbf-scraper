@@ -13,9 +13,9 @@ OPTIONS.add_argument('user-data-dir=%s' % PROFILE)
 OPTIONS.binary_location = '.\\chrome-win32\\chrome.exe'
 
 LOG_FILE = '[{}]GBFScraper.log'.format(strftime('%m-%d_%H%M'))
-USE_PB = True
+USE_PB = False
 API_KEY = {
-    'PB': 'o.LcYNI6OY3AHCI2mMBeNnKG9NFd7yk2LG',
+    'PB': '',
 }
 
 
@@ -46,25 +46,27 @@ def alert_operator(message, pause=True):
         input('Press enter to continue...')
 
 
-def csv_writer(row, filename):
-    with open(filename, 'a', newline='', encoding='utf-8') as fout:
+def csv_writer(rows, filename):
+    with open(filename, 'w', newline='', encoding='utf-8') as fout:
         writer = csv.writer(fout)
-        writer.writerow(row)
+        writer.writerows(rows)
 
 
-def parser(d, parse_type, filename):
-    if parse_type == "GW_individual":
-        d = d['list']
-        for k in d:
-            k = d[k]
-            row = (k['rank'], k['name'], k['total_defeat'],
-                   k['contribution'], k['level'], k['user_id'])
-            csv_writer(row, filename)
-    elif parse_type == "guild_members":
-        d = d['list']
-        for k in d:
-            row = (k['name'], k['level'], k['member_position_name'], k['id'])
-            csv_writer(row, filename)
+def parser(data, parse_type, filename):
+    rows = list()
+    if parse_type == 'gw_individual':
+        rows.append('rank', 'name', 'battles', 'honor', 'level', 'id')  # Headers
+        data = data['list']
+        for k in data:
+            k = data[k]
+            rows.append(k['rank'], k['name'], k['total_defeat'],
+                        k['contribution'], k['level'], k['user_id'])
+    elif parse_type == 'guild_members':
+        rows.append('name', 'level', 'rank', 'id')  # Headers
+        data = data['list']
+        for k in data:
+            rows.append(k['name'], k['level'], k['member_position_name'], k['id'])
+    csv_writer(rows, filename)
 
 
 def scraper(url, filename, parse_type):
@@ -73,26 +75,24 @@ def scraper(url, filename, parse_type):
     }
     while True:
         try:
-            r = GBF.request('get', url, headers=headers).json()
-            parser(r, parse_type, filename)
+            response = GBF.request('get', url, headers=headers).json()
+            parser(response, parse_type, filename)
             return
         # Doesn't seem to be catching timeouts?...
         except (ConnectionResetError, ConnectionError, ConnectionAbortedError):
-            alert_operator("Reauthentication required")
-        log('Connection timed out')
+            alert_operator('Reauthentication required')
 
 
-def handler(baseurl, parse_type, filename, headers, first, last):
-    csv_writer(headers, filename)
+def handler(baseurl, parse_type, filename, first, last):
     for page in range(first, last + 1):
         log('Currently on page: {}'.format(page))
         scraper(baseurl.format(page), filename, parse_type)
         sleep(0.1)
-    # csv_writer(('{} seconds elapsed'.format((time_now() - timestart_seconds)),), filename)
 
 
 def guild_members():
     guilds = {
+        # /gbfg/
         'HSP': 147448,
         'Lum1': 388489,
         'Lum2': 401211,
@@ -112,8 +112,15 @@ def guild_members():
         'Aion no Me': 645927,
         'TOOT': 844716,
         'Fleet': 599992,
+        # ???
         'FMNL1': 540830,
-        'FMNL2': 719518
+        'FMNL2': 719518,
+        # Discord
+        'HinaHana': 439238,
+        # Reddit
+        'TestGuildPleaseIgnore': 0000,
+        # Facebook
+        'SEANiggers': 696969
     }
     directory = '.\\GW28\\Guilds\\Information\\'
     makedirs(directory, exist_ok=True)
@@ -121,29 +128,27 @@ def guild_members():
     for guild in guilds:
         log('Scraping {}'.format(guild))
         filename = directory + '[{}]{}.csv'.format(strftime('%m-%d_%H%M'), guild)
-        headers = ('name', 'level', 'rank', 'id')
-        handler(baseurl.format({}, guilds[guild]), 'guild_members', filename, headers, 1, 3)
+        handler(baseurl.format({}, guilds[guild]), 'guild_members', filename, 1, 3)
 
 
-def GW_individual(first, last):
+def gw_individual(first, last):
     url = 'http://game.granbluefantasy.jp/teamraid028/ranking_user/detail/{}'
-    headers = ('rank', 'name', 'battles', 'honor', 'level', 'id')
     filename = ('.\\GW28\\Individual\\[{}]granblue-scraper_top80k({}-{}).csv'.format(
         str((strftime('%m-%d_%H%M'))), first, last))
     makedirs('.\\GW28\\Individual\\', exist_ok=True)
-    handler(url, 'GW_individual', filename, headers, first, last)
+    handler(url, 'gw_individual', filename, first, last)
 
 
-if __name__ == "__main__":
-    GBF = Chrome(executable_path='.\\chromedriver.exe', chrome_options=OPTIONS)
+if __name__ == '__main__':
+    GBF = Chrome(chrome_options=OPTIONS)
     GBF.get('http://game.granbluefantasy.jp/#profile')
     input()
-    timestart = time_now()
+    TIMESTART = time_now()
     try:
-        GW_individual(4125, 8000)
+        gw_individual(1, 8000)
         guild_members()
         alert_operator('Task finished. {} seconds elapsed.'.format(
-            time_now() - timestart), pause=False)
+            time_now() - TIMESTART), pause=False)
         GBF.close()
         quit()
     except Exception:

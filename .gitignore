@@ -1,6 +1,7 @@
 # Project specific
 /chrome-win32
 /profile
+/GW*
 *.log
 *.exe
 *.vscode
