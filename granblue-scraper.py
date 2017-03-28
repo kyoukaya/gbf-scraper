@@ -7,6 +7,8 @@ from time import sleep, strftime
 from pushbullet import InvalidKeyError, Pushbullet
 from seleniumrequests import Chrome
 
+GW_NUMBER = 29
+
 OPTIONS = webdriver.ChromeOptions()
 PROFILE = path.abspath('.\\profile')
 OPTIONS.add_argument('user-data-dir=%s' % PROFILE)
@@ -46,14 +48,18 @@ def alert_operator(message, pause=True):
         input('Press enter to continue...')
 
 
-def csv_writer(rows, filename):
+def csv_writer(rows, filename, write_rows=True):
     with open(filename, 'w', newline='', encoding='utf-8') as fout:
         writer = csv.writer(fout)
-        writer.writerows(rows)
+        if write_rows:
+            writer.writerows(rows)
+        else:
+            writer.writerow(rows)
 
 
 def parser(data, parse_type, filename):
     rows = list()
+
     if parse_type == 'gw_individual':
         rows.append('rank', 'name', 'battles', 'honor', 'level', 'id')  # Headers
         data = data['list']
@@ -61,12 +67,14 @@ def parser(data, parse_type, filename):
             k = data[k]
             rows.append(k['rank'], k['name'], k['total_defeat'],
                         k['contribution'], k['level'], k['user_id'])
+        csv_writer(rows, filename)
+
     elif parse_type == 'guild_members':
         rows.append('name', 'level', 'rank', 'id')  # Headers
         data = data['list']
         for k in data:
             rows.append(k['name'], k['level'], k['member_position_name'], k['id'])
-    csv_writer(rows, filename)
+            csv_writer(rows, filename, write_rows=False)
 
 
 def scraper(url, filename, parse_type):
@@ -122,7 +130,7 @@ def guild_members():
         # Facebook
         'SEANiggers': 696969
     }
-    directory = '.\\GW28\\Guilds\\Information\\'
+    directory = '.\\GW{}\\Guilds\\Information\\'.format(GW_NUMBER)
     makedirs(directory, exist_ok=True)
     baseurl = 'http://game.granbluefantasy.jp/guild_other/member_list/{}/{}'
     for guild in guilds:
@@ -133,9 +141,9 @@ def guild_members():
 
 def gw_individual(first, last):
     url = 'http://game.granbluefantasy.jp/teamraid028/ranking_user/detail/{}'
-    filename = ('.\\GW28\\Individual\\[{}]granblue-scraper_top80k({}-{}).csv'.format(
-        str((strftime('%m-%d_%H%M'))), first, last))
-    makedirs('.\\GW28\\Individual\\', exist_ok=True)
+    filename = ('.\\GW{}\\Individual\\[{}]granblue-scraper_top80k({}-{}).csv'.format(
+        GW_NUMBER, strftime('%m-%d_%H%M'), first, last))
+    makedirs('.\\GW{}\\Individual\\'.format(GW_NUMBER), exist_ok=True)
     handler(url, 'gw_individual', filename, first, last)
 
 

@@ -1,4 +1,4 @@
-'''Appends rank and honor data to every guild in the Guilds\Information folder
+'''Appends rank and honor data to every guild in the Guilds/Information folder
 by referencing the top 80k individual list with pandas'''
 import csv
 import time
@@ -6,23 +6,23 @@ from os import listdir, makedirs
 
 import pandas
 
-root_dir = '.\\GW28\\Guilds\\'
+ROOT_DIR = '.\\GW28\\Guilds\\'
 inv_dir = '.\\GW28\\Individual\\'
 
 
 def append_guilds():
     timestart = time.time()
-    makedirs(root_dir + 'Processed\\', exist_ok=True)
+    makedirs(ROOT_DIR + 'Processed\\', exist_ok=True)
     inv_ranking = inv_dir + sorted(listdir(inv_dir), reverse=True)[0]
     df = pandas.read_csv(inv_ranking)
     print('Using individual ranking file: {}'.format(sorted(listdir(inv_dir))))
 
-    for filename in listdir(root_dir + 'Information\\'):
+    for filename in listdir(ROOT_DIR + 'Information\\'):
         fin = csv.reader(open(
-            '''{}Information\\{}'''.format(root_dir, filename),
+            '''{}Information\\{}'''.format(ROOT_DIR, filename),
             mode='r', encoding='utf-8'))
         fout = csv.writer(open(
-            '''{}Processed\\{}'''.format(root_dir, filename),
+            '''{}Processed\\{}'''.format(ROOT_DIR, filename),
             mode='w', encoding='utf-8', newline=''))
 
         for line in fin:
