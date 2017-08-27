@@ -1,10 +1,11 @@
 # Project specific
 /chrome-win32
-/profile
-/GW*
+/profile*
+*.csv
 *.log
 *.exe
 *.vscode
+*.pyc
 setup.cfg
 
 # Windows image file caches
@@ -16,16 +17,6 @@ Desktop.ini
 
 # Recycle Bin used on file shares
 $RECYCLE.BIN/
-
-# Windows Installer files
-*.cab
-*.msi
-*.msm
-*.msp
-
-# Windows shortcuts
-*.lnk
-
 # =========================
 # Operating System Files
 # =========================
