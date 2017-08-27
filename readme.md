@@ -1,4 +1,4 @@
-# gbf-scrape
+# gbf-scraper
 
 A couple of simple scripts thrown together to scrape and parse data from Granblue Fantasy's guild wars (GWs) and maybe other stuff too. Requests are not threaded but the script is easily instanced, `gw_scheduled_tasks.py`.
 
