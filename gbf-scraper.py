@@ -12,12 +12,21 @@ from pushbullet import InvalidKeyError, Pushbullet
 from seleniumrequests import Chrome
 
 from config import config
+from csv_parse import csv_parse
 from selenium import webdriver
 
-GW_NUMBER = 32
+GW_NUMBER = 33
 CHROME_ARGUMENTS = '--disable-infobars'
 
 LOG_FILE = '[{}]granblue-scraper.log'.format(strftime('%m-%d_%H%M'))
+
+
+class PrivateGuildError(Exception):
+    pass
+
+
+class DeletedGuildError(Exception):
+    pass
 
 
 class Timer(object):
@@ -126,26 +135,36 @@ def scraper(url, parse_type, **kwargs):
             GBF.refresh()
             TIMER.reset()
         try:
-            response = GBF.request('get', url, headers=headers).json()
+            response = GBF.request('get', url, headers=headers)
+            response = response.json()
             rows = parser(response, parse_type, **kwargs)
             return rows
+
         except (ConnectionResetError, ConnectionError,
                 ConnectionAbortedError, JSONDecodeError):
             if parse_type == 'guild_members':
-                raise
+                raise PrivateGuildError
+            if parse_type == 'guild_info' and response.text[0] == '\n':
+                raise DeletedGuildError
             if (auth_timer - time_now() > 60) or auth_check:
                 GBF.refresh()
                 TIMER.reset()
                 GBF.get('http://game.granbluefantasy.jp/#authentication')
                 sleep(5)
                 # Hard coded mobage login
-                GBF.find_element_by_xpath('//*[@id="mobage-login"]/img').click()
+                try:
+                    GBF.find_element_by_xpath(
+                        '//*[@id="mobage-login"]/img').click()
+                except Exception:
+                    pass
                 alert_operator('Reauthentication', pause=False)
                 auth_timer = time_now()
-                sleep(10)
+                sleep(5)
             continue
-        except:
-            alert_operator('???', pause=False)
+        except Exception as exp:
+            import code
+            code.interact(local=locals())
+            alert_operator(exp, pause=False)
 
 
 def handler(baseurl, parse_type, first, last, **kwargs):
@@ -178,25 +197,31 @@ def handler(baseurl, parse_type, first, last, **kwargs):
 
 
 def guild_members():
-    factions = CFG.get_factions()
-    directory = CFG.base_dir + '\\GW{}\\Guilds\\Information\\'.format(GW_NUMBER)
-    filename = directory + '[{}]Guild Members.csv'.format(strftime('%m-%d_%H%M'))
-    header = ('name', 'level', 'position', 'id', 'faction', 'guild', 'guild_id')
+    directory = CFG.base_dir + \
+        '\\GW{}\\Guilds\\Information\\'.format(GW_NUMBER)
+    filename = directory + \
+        '[{}]guild_members.csv'.format(strftime('%m-%d_%H%M'))
+    header = ('name', 'level', 'position', 'id',
+              'faction', 'guild_name', 'guild_id')
     guilds_scraped = list()
     makedirs(directory, exist_ok=True)
     csv_writer(header, filename, write_rows=False)
-    for faction in factions:
-        faction_name = faction[1]
-        for guild in faction[0]:
-            guild_id = faction[0][guild]
-            try:
-                rows = handler(guild_id, 'guild_members', 1, 3,
-                               faction_name=faction_name)
+    guilds = csv_parse()
 
-                csv_writer(rows, filename)
-                guilds_scraped.append((guild, faction_name, guild_id, 'public'))
-            except Exception:
-                guilds_scraped.append((guild, faction_name, guild_id, 'private'))
+    for guild in guilds:
+        try:
+            rows = handler(guild.id, 'guild_members', 1,
+                           3, faction_name=guild.faction)
+            csv_writer(rows, filename)
+            guilds_scraped.append((guild.guild_alias, guild.faction, guild.id, 'public'))
+        except DeletedGuildError:
+            alert_operator('Guild deleted: {}({})'.format(
+                guild.guild_alias, guild.id))
+            guilds_scraped.append((guild.guild_alias, guild.faction, guild.id, 'deleted'))
+        except PrivateGuildError:
+            log('Guild private')
+            guilds_scraped.append((guild.guild_alias, guild.faction, guild.id, 'private'))
+
     csv_writer(guilds_scraped, directory + '[{}]guilds_scraped.csv'.format(
         strftime('%m-%d_%H%M')))
 
@@ -216,7 +241,8 @@ def gw_guild(first, last, seed_first, seed_last):
 
     baseurl = 'http://game.granbluefantasy.jp/teamraid0{}/ranking_seedguild/detail/{}'.format(
         GW_NUMBER, {})
-    filename = directory + '[{}]Seed_Guild_Rankings.csv'.format(strftime('%m-%d_%H%M'))
+    filename = directory + \
+        '[{}]Seed_Guild_Rankings.csv'.format(strftime('%m-%d_%H%M'))
 
     # Seeds
     csv_writer(header, filename, write_rows=False)
@@ -228,7 +254,7 @@ def gw_individual(first, last):
     directory = CFG.base_dir + '\\GW{}\\Individual\\'.format(GW_NUMBER)
     filename = (directory + '[{}]granblue-scraper_top80k({}-{}).csv'.format(
         strftime('%m-%d_%H%M'), first, last))
-    url = 'http://game.granbluefantasy.jp/teamraid0{}/ranking_user/detail/{}'.format(
+    url = 'http://game.granbluefantasy.jp/teamraid0{}/rest_ranking_user/detail/{}'.format(
         GW_NUMBER, {})
     makedirs(directory, exist_ok=True)
     handler(url, 'gw_individual', first, last, filename=filename)
@@ -238,7 +264,7 @@ def guild_ranks(guild_id):
     url = 'http://game.granbluefantasy.jp/guild_other/member_list/{}/{}'
     filename = ('.\\guild_{}\\[{}]ranks.csv'.format(
         guild_id, strftime('%m-%d_%H%M')))
-    makedirs('.\\{}'.format(guild_id), exist_ok=True)
+    makedirs('.\\guild_{}'.format(guild_id), exist_ok=True)
     rows = handler(url.format({}, guild_id), 'guild_ranks', 1, 3)
     csv_writer(rows, filename)
 
@@ -261,7 +287,8 @@ def main():
                         help='scrapes GW guild rankings between the specified start and end prelim and seed pages', type=int)
     parser.add_argument('--members', '-m',
                         help='scrape member data from guilds specified in config.py', action='store_true')
-    parser.add_argument('--info', '-n', help='scrapes rank info from a guild specified', type=int)
+    parser.add_argument(
+        '--info', '-n', help='scrapes rank info from a guild specified', type=int)
     parser.add_argument('--login', '-l',
                         help='pauses the script upon starting up to allow logging in', action='store_true')
     args = parser.parse_args()

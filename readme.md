@@ -1,6 +1,6 @@
-# gbf-scrape
+# gbf-scraper
 
-A couple of simple scripts thrown together to scrape and parse data from Granblue Fantasy's guild wars (GWs) and maybe other stuff too. Requests are not threaded but the script is easily instanced, `gw_scheduled_tasks.py`.
+A couple of simple scripts thrown together to scrape and parse data from Granblue Fantasy's guild wars and maybe other stuff in the future. Requests are not threaded but the script is easily instanced, `gw_scheduled_tasks.py`.
 
 ## Installation
 
@@ -25,7 +25,7 @@ A couple of simple scripts thrown together to scrape and parse data from Granblu
 
 `example: python gbf-scraper.py profile2 -i 1 8000`
 
-|flag   |arguments|description|
+|flag|arguments|description|
 |---------|---------|-----------|
 |--individual, -i| start, end| Scrapes GW individual rankings between the specified start and end pages
 |--guild, -g| prelim_start, prelim_end, seed_start, seed_end| Scrapes GW guild rankings between the specified start and end pages for both prelim and seed categories

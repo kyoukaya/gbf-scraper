@@ -1,7 +1,8 @@
 # Project specific
+/guild*
+/GW*
 /chrome-win32
 /profile*
-*.csv
 *.log
 *.exe
 *.vscode
